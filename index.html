@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TURBO RACER · 极速狂飙</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🏎️</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<button id="muteBtn" title="静音 (M)">🔊</button>
+<button id="nosBtn" title="氮气加速">NOS</button>
+
+<div id="menu" class="screen">
+  <div class="panel">
+    <h1>TURBO <span>RACER</span></h1>
+    <p class="sub">极速狂飙 · 检查点生存</p>
+    <div class="controls">
+      <div><b>← →</b> 转向 &nbsp; <b>↑</b> 油门 &nbsp; <b>↓</b> 刹车</div>
+      <div><b>Shift</b> 释放氮气 <span class="hl">（超车 / 吸尾流充能）</span></div>
+      <div><b>P</b> 暂停 &nbsp; <b>M</b> 静音</div>
+      <div class="touch-tip">📱 手机：按住左右半屏转向，右下角 NOS 按钮</div>
+    </div>
+    <div class="rules">
+      <div>⏱ 时间耗尽即结束 —— <b>冲过检查点</b>才能续命</div>
+      <div>🏔 弯道有离心力，入弯必须减速修正</div>
+      <div>🔥 贴身超车触发连击，同时为氮气充能</div>
+    </div>
+    <button class="btn" id="startBtn">🏁 开始比赛</button>
+    <p class="hs">最高纪录 <span id="menuHS">0</span> 分</p>
+  </div>
+</div>
+
+<div id="gameover" class="screen hidden">
+  <div class="panel">
+    <h1 class="crash-title" id="goTitle">⏰ 时间到！</h1>
+    <p id="newRecord" class="new-record hidden">🎉 新纪录！</p>
+    <div class="stats">
+      <div class="stat"><span class="label">得分</span><span class="value" id="finalScore">0</span></div>
+      <div class="stat"><span class="label">关卡</span><span class="value" id="finalStage">1</span></div>
+      <div class="stat"><span class="label">里程</span><span class="value" id="finalDist">0 km</span></div>
+      <div class="stat"><span class="label">极速</span><span class="value" id="finalTop">0 km/h</span></div>
+    </div>
+    <button class="btn" id="restartBtn">🔁 再来一局</button>
+    <p class="tip">按 Enter / 空格 快速重开</p>
+  </div>
+</div>
+
+<div id="pause" class="screen hidden">
+  <div class="panel small">
+    <h1>⏸ 已暂停</h1>
+    <button class="btn" id="resumeBtn">▶ 继续</button>
+    <p class="tip">按 P 也可继续</p>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
