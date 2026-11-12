@@ -17,6 +17,10 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
 const randi = (a, b) => Math.floor(rand(a, b + 1));
 const pick = (arr) => arr[randi(0, arr.length - 1)];
+const moveToward = (v, target, maxDelta) => {
+  const d = target - v;
+  return Math.abs(d) <= maxDelta ? target : v + Math.sign(d) * maxDelta;
+};
 const easeIn = (a, b, p) => a + (b - a) * p * p;
 const easeInOut = (a, b, p) => a + (b - a) * ((-Math.cos(p * Math.PI) / 2) + 0.5);
 
@@ -169,6 +173,7 @@ const ROAD_W = 900;
 const CAM_H = 1000;
 const CAM_D = 1 / Math.tan((100 / 2) * Math.PI / 180);   // ≈ 0.8391
 const PLAYER_Z = CAM_H * CAM_D;                          // 玩家车在镜头前方距离 ≈ 839
+const COCKPIT_H = 430;                                   // 驾驶舱视角镜头高度
 const DRAW_DIST = 160;                                   // 绘制段数
 const FOG_DENSITY = 6;
 const MAX_SPEED = 12000;
@@ -210,6 +215,7 @@ function saveHS(v) { try { localStorage.setItem(HS_KEY, String(v)); } catch (e) 
 const G = {
   state: 'menu',        // menu | countdown | playing | crash | gameover | paused
   position: 0, speed: 0, playerX: 0, steerVis: 0, playerY: 0,
+  cockpit: false, viewBlend: 0,   // 驾驶舱视角（0 追尾 → 1 舱内）
   timeLeft: 55, stage: 1, cpIndex: 0, stageStartSeg: 0,
   score: 0, combo: 0, comboTimer: 0,
   nos: 40, boosting: false, draft: false,
@@ -421,6 +427,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
   if (e.code === 'KeyM') updateMuteBtn(AudioSys.toggleMute());
+  if (e.code === 'KeyC') toggleView();
 });
 window.addEventListener('keyup', (e) => { G.keys[e.code] = false; });
 
@@ -546,6 +553,12 @@ function togglePause() {
     G.state = 'playing';
     hideAll();
   }
+}
+
+function toggleView() {
+  G.cockpit = !G.cockpit;
+  $('viewBtn').classList.toggle('active', G.cockpit);
+  $('viewBtn').textContent = G.cockpit ? '🚗' : '🎥';
 }
 
 /* ---------------- 更新 ---------------- */
@@ -681,6 +694,7 @@ function update(dt, rdt, now) {
   }
   updateParticles(dt);
   if (G.bannerT > 0) G.bannerT -= rdt;
+  G.viewBlend = moveToward(G.viewBlend, G.cockpit ? 1 : 0, 4 * rdt);
   G.shake *= Math.exp(-6 * dt);
   G.bgOffset += findSegment(G.position + PLAYER_Z).curve * (G.speed / MAX_SPEED) * dt * 60;
 }
@@ -820,16 +834,19 @@ function renderWorld(theme, now) {
   ctx.fillStyle = theme.grass1;
   ctx.fillRect(0, H / 2, W, H / 2);
 
-  const baseAbs = Math.floor(G.position / SEG_LEN);
-  const basePct = (G.position % SEG_LEN) / SEG_LEN;
+  const vb = G.viewBlend;
+  const camZ = lerp(G.position, G.position + PLAYER_Z, vb);   // 舱内视角：镜头移到车头
+  const camH = lerp(CAM_H, COCKPIT_H, vb);
+  const baseAbs = Math.floor(camZ / SEG_LEN);
+  const basePct = (camZ % SEG_LEN) / SEG_LEN;
   const playerAbs = Math.floor((G.position + PLAYER_Z) / SEG_LEN);
   const playerSeg = segAt(playerAbs) || segments[0];
   const playerPct = ((G.position + PLAYER_Z) % SEG_LEN) / SEG_LEN;
   const playerY = lerp(playerSeg.y, segYAt(playerAbs + 1), playerPct);
   G.playerY = playerY;
 
-  const camX = G.playerX * ROAD_W;
-  const camY = playerY + CAM_H;
+  const camX = G.playerX * ROAD_W + G.steerVis * 90 * vb;     // 舱内：随转向轻微摆头
+  const camY = playerY + camH;
 
   // ---- 第一遍：路面 ----
   let maxy = H;
@@ -840,7 +857,7 @@ function renderWorld(theme, now) {
     const seg = segAt(baseAbs + n);
     if (!seg) break;
     const next = segAt(baseAbs + n + 1);
-    const dz1 = seg.index * SEG_LEN - G.position;
+    const dz1 = seg.index * SEG_LEN - camZ;
     const dz2 = dz1 + SEG_LEN;
     const x1off = x, x2off = x + dx;
     x += dx;
@@ -914,7 +931,7 @@ function renderWorld(theme, now) {
   }
   for (const c of G.cars) {
     const idx = Math.floor(c.z / SEG_LEN) - baseAbs;
-    if (idx >= 0 && idx < DRAW_DIST && c.z - G.position > 60) segAt(baseAbs + idx).cars.push(c);
+    if (idx >= 0 && idx < DRAW_DIST && c.z - camZ > 60) segAt(baseAbs + idx).cars.push(c);
   }
 
   for (let n = DRAW_DIST - 1; n >= 0; n--) {
@@ -1145,10 +1162,16 @@ function drawTruck(cx, cy, w, color, theme) {
 function playerScreenPos() {
   const pw = (CAM_D / PLAYER_Z) * 0.42 * ROAD_W * (W / 2);
   const ph = pw * 0.78;
-  return { px: W / 2, py: H - ph * 0.42 - 22, pw };
+  const chaseY = H - ph * 0.42 - 22;
+  const py = lerp(chaseY, H - 30, G.viewBlend);   // 舱内视角：爆炸/车灯源移到挡风玻璃处
+  return { px: W / 2 + G.steerVis * 14 * (1 - G.viewBlend), py, pw };
 }
 
 function drawPlayer(now) {
+  if (G.viewBlend > 0.55) return;
+  const a = 1 - clamp((G.viewBlend - 0.25) / 0.3, 0, 1);
+  if (a <= 0) return;
+  ctx.globalAlpha = a;
   const { px, py, pw } = playerScreenPos();
   const speedPct = G.speed / MAX_SPEED;
   const bounce = (Math.sin(now * 0.02) + Math.sin(now * 0.013)) * 1.6 * speedPct;
@@ -1160,6 +1183,96 @@ function drawPlayer(now) {
     boost: G.boosting,
     night: currentTheme.dark
   });
+  ctx.globalAlpha = 1;
+}
+
+/* 驾驶舱视角：引擎盖 + 方向盘 + A 柱 + 车内暗角 */
+function drawCockpit(theme, now) {
+  const a = clamp((G.viewBlend - 0.3) / 0.4, 0, 1);
+  if (a <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = a;
+
+  // A 柱
+  ctx.fillStyle = 'rgba(12,12,15,0.92)';
+  ctx.beginPath();
+  ctx.moveTo(0, H * 0.42); ctx.lineTo(W * 0.052, H * 0.44); ctx.lineTo(W * 0.012, H); ctx.lineTo(-W * 0.02, H);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(W, H * 0.42); ctx.lineTo(W - W * 0.052, H * 0.44); ctx.lineTo(W - W * 0.012, H); ctx.lineTo(W + W * 0.02, H);
+  ctx.closePath(); ctx.fill();
+
+  // 引擎盖
+  const hoodTop = H * 0.862;
+  const g = ctx.createLinearGradient(0, hoodTop, 0, H);
+  g.addColorStop(0, '#c93c25');
+  g.addColorStop(0.45, '#e8452c');
+  g.addColorStop(1, '#9c2c1b');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(-W * 0.08, H);
+  ctx.lineTo(W * 0.17, hoodTop + H * 0.018);
+  ctx.quadraticCurveTo(W / 2, hoodTop - H * 0.016, W * 0.83, hoodTop + H * 0.018);
+  ctx.lineTo(W * 1.08, H);
+  ctx.closePath();
+  ctx.fill();
+  // 引擎盖拉花
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (const off of [-0.055, 0.026]) {
+    ctx.beginPath();
+    ctx.moveTo(W / 2 + off * W - W * 0.02, H);
+    ctx.lineTo(W / 2 + off * W - W * 0.012, hoodTop + H * 0.024);
+    ctx.lineTo(W / 2 + off * W + W * 0.012, hoodTop + H * 0.024);
+    ctx.lineTo(W / 2 + off * W + W * 0.02, H);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // 引擎盖高光
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.beginPath();
+  ctx.moveTo(W * 0.3, H);
+  ctx.quadraticCurveTo(W * 0.44, hoodTop + H * 0.028, W * 0.52, hoodTop + H * 0.022);
+  ctx.quadraticCurveTo(W * 0.54, H * 0.94, W * 0.48, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // 方向盘（随转向/撞车旋转）
+  const wx = W / 2 + G.steerVis * 24;
+  const wy = H * 1.045;
+  const wr = Math.min(W, H) * 0.205;
+  const rot = G.steerVis * 0.55 + (G.state === 'crash' ? G.spin * 0.4 : 0);
+  ctx.save();
+  ctx.translate(wx, wy);
+  ctx.rotate(rot);
+  ctx.strokeStyle = '#1e2025';
+  ctx.lineWidth = wr * 0.13;
+  ctx.beginPath(); ctx.arc(0, 0, wr, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#3d4049';
+  ctx.lineWidth = wr * 0.05;
+  ctx.beginPath(); ctx.arc(0, -wr * 0.02, wr * 0.92, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#26282e';
+  ctx.lineWidth = wr * 0.11;
+  for (const ang of [Math.PI, 0, Math.PI / 2]) {
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang) * wr * 0.1, Math.sin(ang) * wr * 0.1);
+    ctx.lineTo(Math.cos(ang) * wr * 0.95, Math.sin(ang) * wr * 0.95);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#d43a26';
+  ctx.beginPath(); ctx.arc(0, 0, wr * 0.21, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = `900 ${wr * 0.15}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('T', 0, wr * 0.05);
+  ctx.restore();
+
+  // 车内暗角
+  const vg = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.34, W / 2, H * 0.55, H * 0.88);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.32)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
 }
 
 /* ---------------- 绘制：特效与 HUD ---------------- */
@@ -1360,6 +1473,7 @@ function render(now) {
 
   renderWorld(currentTheme, now);
   drawPlayer(now);
+  drawCockpit(currentTheme, now);
   drawParticles();
   drawTexts();
   if (G.state === 'playing' || G.state === 'crash') drawSpeedLines();
@@ -1384,6 +1498,7 @@ function frame(now) {
 /* ---------------- UI 绑定 ---------------- */
 function updateMuteBtn(muted) { $('muteBtn').textContent = muted ? '🔇' : '🔊'; }
 $('muteBtn').addEventListener('click', () => { AudioSys.ensure(); updateMuteBtn(AudioSys.toggleMute()); });
+$('viewBtn').addEventListener('click', () => { AudioSys.ensure(); toggleView(); });
 $('startBtn').addEventListener('click', () => { AudioSys.ensure(); start(); });
 $('restartBtn').addEventListener('click', () => { AudioSys.ensure(); start(); });
 $('resumeBtn').addEventListener('click', togglePause);

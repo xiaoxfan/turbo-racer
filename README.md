@@ -27,6 +27,7 @@ docker run -d --name turbo-racer -p 8080:80 -v "$PWD":/usr/share/nginx/html:ro n
 | `↑` / `W` | 油门 |
 | `↓` / `S` | 刹车 |
 | `Shift` | 释放 NOS 氮气 |
+| `C` | 切换驾驶舱 / 追尾视角 |
 | `P` / `Esc` | 暂停 · `M` 静音 · `Enter` 开始/重开 |
 
 📱 移动端：按住屏幕左右半边转向（自动油门），右下角 NOS 按钮释放氮气。
@@ -40,6 +41,7 @@ docker run -d --name turbo-racer -p 8080:80 -v "$PWD":/usr/share/nginx/html:ro n
 
 ## ✨ 技术特性
 
+- **双视角系统**：追尾视角 ⇄ 驾驶舱视角（引擎盖 + 随转向转动的方向盘 + A 柱 + 车内暗角），镜头平滑过渡
 - **分段式伪 3D 赛道引擎**：程序化生成无尽赛道（弯道 / S 弯 / 坡道 / 丘陵），透视投影 + 山体遮挡裁剪 + 距离雾
 - **昼夜主题系统**：四套调色板随关卡进度连续插值，夜星空 + 月亮 + 车头灯体积光锥
 - **AI 车流**：轿车 / 卡车混合，跟车减速、主动变道，难度随关卡爬升
@@ -54,6 +56,6 @@ turbo-racer/
 ├── index.html    # 页面骨架 + UI 覆盖层
 ├── style.css     # 玻璃拟态 UI
 ├── game.js       # 引擎与玩法全部逻辑
-├── screenshots/  # 实机截图
+├── screenshots/  # 实机截图（白天/午夜/驾驶舱双视角）
 └── README.md
 ```

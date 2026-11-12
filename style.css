@@ -26,6 +26,20 @@ html, body {
 }
 #muteBtn:hover { background: rgba(0, 0, 0, 0.55); transform: translateX(-50%) scale(1.1); }
 
+#viewBtn {
+  position: fixed; top: 14px; left: calc(50% + 36px);
+  z-index: 30;
+  width: 44px; height: 44px;
+  font-size: 19px; line-height: 1;
+  border: none; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff; cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: transform 0.15s, background 0.15s;
+}
+#viewBtn:hover { background: rgba(0, 0, 0, 0.55); transform: scale(1.1); }
+#viewBtn.active { background: rgba(255, 207, 63, 0.45); }
+
 #nosBtn {
   position: fixed; right: 22px; bottom: 26px;
   z-index: 30;
